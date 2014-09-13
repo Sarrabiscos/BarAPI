@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import me.confuser.barapi.nms.FakeDragon;
 import me.confuser.barapi.nms.v1_6;
 import me.confuser.barapi.nms.v1_7;
+import me.confuser.barapi.nms.v1_8Hack;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -28,23 +29,29 @@ public class Util {
 	public static Class<?> fakeDragonClass = v1_6.class;
 
 	static {
-		String name = Bukkit.getServer().getClass().getPackage().getName();
-		String mcVersion = name.substring(name.lastIndexOf('.') + 1);
-		String[] versions = mcVersion.split("_");
+		if (BarAPI.spigotHack) {
+			fakeDragonClass = v1_8Hack.class;
+			version = "v1_7_R4.";
+		} else {
+			String name = Bukkit.getServer().getClass().getPackage().getName();
+			String mcVersion = name.substring(name.lastIndexOf('.') + 1);
+			String[] versions = mcVersion.split("_");
 
-		if (versions[0].equals("v1") && Integer.parseInt(versions[1]) > 6) {
-			newProtocol = true;
-			fakeDragonClass = v1_7.class;
+			if (versions[0].equals("v1") && Integer.parseInt(versions[1]) > 6) {
+				newProtocol = true;
+				fakeDragonClass = v1_7.class;
+			}
+
+			version = mcVersion + ".";
 		}
-
-		version = mcVersion + ".";
 	}
 
 	public static FakeDragon newDragon(String message, Location loc) {
 		FakeDragon fakeDragon = null;
 
 		try {
-			fakeDragon = (FakeDragon) fakeDragonClass.getConstructor(String.class, Location.class).newInstance(message, loc);
+			fakeDragon = (FakeDragon) fakeDragonClass
+					.getConstructor(String.class, Location.class).newInstance(message, loc);
 		} catch (IllegalArgumentException e) {
 			e.printStackTrace();
 		} catch (SecurityException e) {
@@ -147,7 +154,8 @@ public class Util {
 
 	public static Method getMethod(Class<?> cl, String method, Integer args) {
 		for (Method m : cl.getMethods()) {
-			if (m.getName().equals(method) && args.equals(new Integer(m.getParameterTypes().length))) {
+			if (m.getName().equals(method)
+					&& args.equals(new Integer(m.getParameterTypes().length))) {
 				return m;
 			}
 		}
@@ -166,8 +174,7 @@ public class Util {
 	public static boolean ClassListEqual(Class<?>[] l1, Class<?>[] l2) {
 		boolean equal = true;
 
-		if (l1.length != l2.length)
-			return false;
+		if (l1.length != l2.length) return false;
 		for (int i = 0; i < l1.length; i++) {
 			if (l1[i] != l2[i]) {
 				equal = false;

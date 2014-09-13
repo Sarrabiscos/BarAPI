@@ -1,11 +1,17 @@
 package me.confuser.barapi;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.UUID;
+
 import me.confuser.barapi.nms.FakeDragon;
 import net.gravitydevelopment.updater.Updater;
+
 import org.apache.commons.lang.Validate;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -16,10 +22,6 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.mcstats.MetricsLite;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.UUID;
 
 /**
  * Allows plugins to safely set a health bar message.
@@ -32,21 +34,22 @@ public class BarAPI extends JavaPlugin implements Listener {
 	private static HashMap<UUID, Integer> timers = new HashMap<UUID, Integer>();
 
 	private static BarAPI plugin;
+	protected static boolean spigotHack;
 
 	public void onEnable() {
 		getConfig().options().copyDefaults(true);
 		saveConfig();
-		
+
 		if (getConfig().getBoolean("autoUpdate"))
 			new Updater(this, 64876, getFile(), Updater.UpdateType.DEFAULT, false);
-		
+
 		try {
-		    MetricsLite metrics = new MetricsLite(this);
-		    metrics.start();
+			MetricsLite metrics = new MetricsLite(this);
+			metrics.start();
 		} catch (IOException e) {
-		    // Failed to submit the stats :-(
+			// Failed to submit the stats :-(
 		}
-		
+
 		getServer().getPluginManager().registerEvents(this, this);
 
 		getLogger().info("Loaded");
@@ -56,29 +59,46 @@ public class BarAPI extends JavaPlugin implements Listener {
 		// TestMode
 		if (getConfig().getBoolean("testMode")) {
 			plugin.getServer().getScheduler().runTaskTimer(plugin, new Runnable() {
-	
+
 				@Override
 				public void run() {
 					for (Player player : plugin.getServer().getOnlinePlayers()) {
-						BarAPI.setMessage(player, ChatColor.AQUA + "Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI", 10);
+						BarAPI.setMessage(
+								player,
+								ChatColor.AQUA
+										+ "Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI Testing BarAPI",
+								10);
 					}
 				}
-	
+
 			}, 30L, 300L);
 		}
+		spigotHack = getConfig().getBoolean("SpigotHack");
+		if (spigotHack)
+			getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
+				public void run() {
+					for (UUID uuid : players.keySet()) {
+						Player p = Bukkit.getPlayer(uuid);
+						Util.sendPacket(
+								p,
+								players.get(uuid).getTeleportPacket(
+										getDragonLocation(p.getLocation())));
+					}
+				}
+			}, 0L, 5L);
 	}
-	
+
 	public void onDisable() {
 		for (Player player : plugin.getServer().getOnlinePlayers()) {
 			quit(player);
 		}
 
 		players.clear();
-		
+
 		for (int timerID : timers.values()) {
 			Bukkit.getScheduler().cancelTask(timerID);
 		}
-		
+
 		timers.clear();
 	}
 
@@ -104,17 +124,16 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 	private void handleTeleport(final Player player, final Location loc) {
 
-		if (!hasBar(player))
-			return;
+		if (!hasBar(player)) return;
 
 		Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
 
 			@Override
 			public void run() {
-				// Check if the player still has a dragon after the two ticks! ;)
-				if (!hasBar(player))
-					return;
-				
+				// Check if the player still has a dragon after the two ticks!
+				// ;)
+				if (!hasBar(player)) return;
+
 				FakeDragon oldDragon = getDragon(player, "");
 
 				float health = oldDragon.health;
@@ -136,15 +155,18 @@ public class BarAPI extends JavaPlugin implements Listener {
 	private void quit(Player player) {
 		removeBar(player);
 	}
-	
+
 	/**
 	 * Set a message for all players.<br>
-	 * It will remain there until the player logs off or another plugin overrides it.<br>
-	 * This method will show a full health bar and will cancel any running timers.
+	 * It will remain there until the player logs off or another plugin
+	 * overrides it.<br>
+	 * This method will show a full health bar and will cancel any running
+	 * timers.
 	 * 
 	 * @param message
 	 *            The message shown.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 * @see BarAPI#setMessage(player, message)
 	 */
@@ -156,14 +178,17 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 	/**
 	 * Set a message for the given player.<br>
-	 * It will remain there until the player logs off or another plugin overrides it.<br>
-	 * This method will show a full health bar and will cancel any running timers.
+	 * It will remain there until the player logs off or another plugin
+	 * overrides it.<br>
+	 * This method will show a full health bar and will cancel any running
+	 * timers.
 	 * 
 	 * @param player
 	 *            The player who should see the given message.
 	 * @param message
 	 *            The message shown to the player.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 */
 	public static void setMessage(Player player, String message) {
@@ -176,19 +201,23 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 		sendDragon(dragon, player);
 	}
-	
+
 	/**
 	 * Set a message for all players.<br>
-	 * It will remain there for each player until the player logs off or another plugin overrides it.<br>
-	 * This method will show a health bar using the given percentage value and will cancel any running timers.
+	 * It will remain there for each player until the player logs off or another
+	 * plugin overrides it.<br>
+	 * This method will show a health bar using the given percentage value and
+	 * will cancel any running timers.
 	 * 
 	 * @param message
 	 *            The message shown to the player.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 * @param percent
 	 *            The percentage of the health bar filled.<br>
-	 *            This value must be between 0F (inclusive) and 100F (inclusive).
+	 *            This value must be between 0F (inclusive) and 100F
+	 *            (inclusive).
 	 * @throws IllegalArgumentException
 	 *             If the percentage is not within valid bounds.
 	 * @see BarAPI#setMessage(player, message, percent)
@@ -201,24 +230,29 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 	/**
 	 * Set a message for the given player.<br>
-	 * It will remain there until the player logs off or another plugin overrides it.<br>
-	 * This method will show a health bar using the given percentage value and will cancel any running timers.
+	 * It will remain there until the player logs off or another plugin
+	 * overrides it.<br>
+	 * This method will show a health bar using the given percentage value and
+	 * will cancel any running timers.
 	 * 
 	 * @param player
 	 *            The player who should see the given message.
 	 * @param message
 	 *            The message shown to the player.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 * @param percent
 	 *            The percentage of the health bar filled.<br>
-	 *            This value must be between 0F (inclusive) and 100F (inclusive).
+	 *            This value must be between 0F (inclusive) and 100F
+	 *            (inclusive).
 	 * @throws IllegalArgumentException
 	 *             If the percentage is not within valid bounds.
 	 */
 	public static void setMessage(Player player, String message, float percent) {
-		Validate.isTrue(0F <= percent && percent <= 100F, "Percent must be between 0F and 100F, but was: ", percent);
-		
+		Validate.isTrue(0F <= percent && percent <= 100F,
+				"Percent must be between 0F and 100F, but was: ", percent);
+
 		FakeDragon dragon = getDragon(player, message);
 
 		dragon.name = cleanMessage(message);
@@ -228,17 +262,20 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 		sendDragon(dragon, player);
 	}
-	
+
 	/**
 	 * Set a message for all players.<br>
-	 * It will remain there for each player until the player logs off or another plugin overrides it.<br>
-	 * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
+	 * It will remain there for each player until the player logs off or another
+	 * plugin overrides it.<br>
+	 * This method will use the health bar as a decreasing timer, all previously
+	 * started timers will be cancelled.<br>
 	 * The timer starts with a full bar.<br>
 	 * The health bar will be removed automatically if it hits zero.
 	 * 
 	 * @param message
 	 *            The message shown.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 * @param seconds
 	 *            The amount of seconds displayed by the timer.<br>
@@ -255,8 +292,10 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 	/**
 	 * Set a message for the given player.<br>
-	 * It will remain there until the player logs off or another plugin overrides it.<br>
-	 * This method will use the health bar as a decreasing timer, all previously started timers will be cancelled.<br>
+	 * It will remain there until the player logs off or another plugin
+	 * overrides it.<br>
+	 * This method will use the health bar as a decreasing timer, all previously
+	 * started timers will be cancelled.<br>
 	 * The timer starts with a full bar.<br>
 	 * The health bar will be removed automatically if it hits zero.
 	 * 
@@ -264,7 +303,8 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 *            The player who should see the given timer/message.
 	 * @param message
 	 *            The message shown to the player.<br>
-	 *            Due to limitations in Minecraft this message cannot be longer than 64 characters.<br>
+	 *            Due to limitations in Minecraft this message cannot be longer
+	 *            than 64 characters.<br>
 	 *            It will be cut to that size automatically.
 	 * @param seconds
 	 *            The amount of seconds displayed by the timer.<br>
@@ -274,7 +314,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 */
 	public static void setMessage(final Player player, String message, int seconds) {
 		Validate.isTrue(seconds > 0, "Seconds must be above 1 but was: ", seconds);
-		
+
 		FakeDragon dragon = getDragon(player, message);
 
 		dragon.name = cleanMessage(message);
@@ -284,22 +324,23 @@ public class BarAPI extends JavaPlugin implements Listener {
 
 		cancelTimer(player);
 
-		timers.put(player.getUniqueId(), Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+		timers.put(player.getUniqueId(),
+				Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
 
-			@Override
-			public void run() {
-				FakeDragon drag = getDragon(player, "");
-				drag.health -= dragonHealthMinus;
+					@Override
+					public void run() {
+						FakeDragon drag = getDragon(player, "");
+						drag.health -= dragonHealthMinus;
 
-				if (drag.health <= 1) {
-					removeBar(player);
-					cancelTimer(player);
-				} else {
-					sendDragon(drag, player);
-				}
-			}
+						if (drag.health <= 1) {
+							removeBar(player);
+							cancelTimer(player);
+						} else {
+							sendDragon(drag, player);
+						}
+					}
 
-		}, 20L, 20L).getTaskId());
+				}, 20L, 20L).getTaskId());
 
 		sendDragon(dragon, player);
 	}
@@ -323,8 +364,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 *            The player whose bar should be removed.
 	 */
 	public static void removeBar(Player player) {
-		if (!hasBar(player))
-			return;
+		if (!hasBar(player)) return;
 
 		Util.sendPacket(player, getDragon(player, "").getDestroyPacket());
 
@@ -344,14 +384,13 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 *            This value must be between 0F and 100F (inclusive).
 	 */
 	public static void setHealth(Player player, float percent) {
-		if (!hasBar(player))
-			return;
+		if (!hasBar(player)) return;
 
 		FakeDragon dragon = getDragon(player, "");
 		dragon.health = (percent / 100f) * FakeDragon.MAX_HEALTH;
 
 		cancelTimer(player);
-		
+
 		if (percent == 0) {
 			removeBar(player);
 		} else {
@@ -368,8 +407,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 *         If the player has no bar, this method returns -1.
 	 */
 	public static float getHealth(Player player) {
-		if (!hasBar(player))
-			return -1;
+		if (!hasBar(player)) return -1;
 
 		return getDragon(player, "").health;
 	}
@@ -383,15 +421,13 @@ public class BarAPI extends JavaPlugin implements Listener {
 	 *         If the player has no bar, this method returns an empty string.
 	 */
 	public static String getMessage(Player player) {
-		if (!hasBar(player))
-			return "";
+		if (!hasBar(player)) return "";
 
 		return getDragon(player, "").name;
 	}
 
 	private static String cleanMessage(String message) {
-		if (message.length() > 64)
-			message = message.substring(0, 63);
+		if (message.length() > 64) message = message.substring(0, 63);
 
 		return message;
 	}
@@ -405,8 +441,17 @@ public class BarAPI extends JavaPlugin implements Listener {
 	}
 
 	private static void sendDragon(FakeDragon dragon, Player player) {
+		if (spigotHack) {
+			float health = dragon.health;
+			String message = dragon.name;
+			Util.sendPacket(player, dragon.getDestroyPacket());
+			players.remove(player.getUniqueId());
+
+			dragon = addDragon(player, getDragonLocation(player.getLocation()), message);
+			dragon.health = health;
+		}
 		Util.sendPacket(player, dragon.getMetaPacket(dragon.getWatcher()));
-		Util.sendPacket(player, dragon.getTeleportPacket(player.getLocation().add(0, -300, 0)));
+		Util.sendPacket(player, dragon.getTeleportPacket(getDragonLocation(player.getLocation())));
 	}
 
 	private static FakeDragon getDragon(Player player, String message) {
@@ -417,7 +462,7 @@ public class BarAPI extends JavaPlugin implements Listener {
 	}
 
 	private static FakeDragon addDragon(Player player, String message) {
-		FakeDragon dragon = Util.newDragon(message, player.getLocation().add(0, -300, 0));
+		FakeDragon dragon = Util.newDragon(message, getDragonLocation(player.getLocation()));
 
 		Util.sendPacket(player, dragon.getSpawnPacket());
 
@@ -427,12 +472,36 @@ public class BarAPI extends JavaPlugin implements Listener {
 	}
 
 	private static FakeDragon addDragon(Player player, Location loc, String message) {
-		FakeDragon dragon = Util.newDragon(message, loc.add(0, -300, 0));
+		FakeDragon dragon = Util.newDragon(message, getDragonLocation(loc));
 
 		Util.sendPacket(player, dragon.getSpawnPacket());
 
 		players.put(player.getUniqueId(), dragon);
 
 		return dragon;
+	}
+
+	private static Location getDragonLocation(Location loc) {
+		if (!spigotHack) {
+			loc.subtract(0, 300, 0);
+			return loc;
+		}
+		float pitch = loc.getPitch();
+		if (pitch >= 55)
+			loc.add(0, -300, 0);
+		else if (pitch <= -55)
+			loc.add(0, 300, 0);
+		else
+			loc = loc.getBlock().getRelative(getDirection(loc), 155).getLocation();
+		return loc;
+	}
+
+	private static BlockFace getDirection(Location loc) {
+		float dir = Math.round(loc.getYaw() / 90);
+		if (dir == -4 || dir == 0 || dir == 4) return BlockFace.SOUTH;
+		if (dir == -1 || dir == 3) return BlockFace.EAST;
+		if (dir == -2 || dir == 2) return BlockFace.NORTH;
+		if (dir == -3 || dir == 1) return BlockFace.WEST;
+		return null;
 	}
 }
